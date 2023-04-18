@@ -8,12 +8,13 @@ from collections import deque
 
 # Define ArduinoCommunication class
 class ArduinoCommunication:
-    def __init__(self, port='COM5', baudrate=115200):
+    def __init__(self, port='COM5', baudrate=115200, data_filename='sensor_data.txt'):
         self.serial = serial.Serial(port, baudrate)
         self.stop_receive_thread = threading.Event()
         self.receive_thread = threading.Thread(target=self.receive_message_thread, daemon=True)
         self.data_callback = None
         self.receive_thread.start()
+        self.data_file = open(data_filename, 'a')
 
     def __enter__(self):
         return self
@@ -31,6 +32,7 @@ class ArduinoCommunication:
                 message = self.serial.readline().decode('utf-8').rstrip()
                 try:
                     data = json.loads(message)
+                    self.save_to_file(message)
                     if self.data_callback:
                         self.data_callback(data)
                 except json.JSONDecodeError:
@@ -40,10 +42,14 @@ class ArduinoCommunication:
         self.stop_receive_thread.set()
         self.receive_thread.join()
         self.serial.close()
+        self.data_file.close()
+
+    def save_to_file(self, message):
+        self.data_file.write(message + '\n')
 
 # Define SensorDataPlot class
 class SensorDataPlot:
-    def __init__(self, maxlen=100):
+    def __init__(self, maxlen=1000):
         self.sensor_data = deque(maxlen=maxlen)
         self.fig, self.ax = plt.subplots()
         self.line, = self.ax.plot([], [], lw=2, label='Sensor 1')
@@ -64,8 +70,7 @@ class SensorDataPlot:
         self.ax.set_xlabel('Measurements')
         self.ax.set_ylabel('Sensor Value')
         self.ax.legend(loc='upper right')
-        self.ax.grid()
-        
+        self.ax.grid()  # Add grid to the plot
         ani = animation.FuncAnimation(self.fig, self.update_plot, blit=True, interval=100, repeat=True)
         plt.show()
 
